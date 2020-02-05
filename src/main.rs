@@ -6,7 +6,7 @@ use rand::Rng;
 // Builds information about transitions.
 pub struct Builder {
     // Transition counts from c1 to c2.
-    transitions: HashMap<char, HashMap<char, i32>>
+    transitions: HashMap<String, HashMap<char, i32>>
 }
 
 impl Builder {
@@ -14,26 +14,30 @@ impl Builder {
         Builder { transitions: HashMap::new() }
     }
     
-    pub fn add_char_pair(&mut self, c1: char, c2: char, count: i32) {
+    pub fn add_char_pair(&mut self, c1: &String, c2: char, count: i32) {
         *self
-            .transitions.entry(c1)
+            .transitions.entry(c1.to_string())
             .or_insert(HashMap::new())
             .entry(c2)
             .or_insert(0)
             += count;       
     }
 
-    pub fn add_pairs_from_string(&mut self, word: &String, count: i32) {
-        let sz = word.len();
-        if  sz > 0 {
-            let s = format!("{}{}", word, END_WORD);
-            let mut prev =  START_WORD;
-            for c in s.chars() {
-                self.add_char_pair(prev, c, count);
-                //                    println!("{} '{}'->'{}'", count, prev, c);
-                prev = c;
-            }
+    pub fn add_pairs_from_string(&mut self, word: &String, count: i32, length: usize) {
+        let wchars: Vec<char>  = word.chars().collect();
+        if  wchars.len() == 0 {
+            return
         }
+            
+        let mut w: Vec<char> = vec![START_WORD; length];
+        w.extend(word.chars());
+        w.extend(vec![END_WORD; length]);
+
+        for i in 0..wchars.len()+length {
+            let prev = w.get(i..i+length).expect("internal error").into_iter().collect();
+            self.add_char_pair(&prev, w[i+length], count);
+        }
+
     }
     
 }
@@ -47,7 +51,7 @@ struct CumCount {
 
 // Generates random words.
 struct Generator {
-    transitions: HashMap<char, Vec<CumCount>>    
+    transitions: HashMap<String, Vec<CumCount>>    
 }
 
 impl Generator {
@@ -70,24 +74,25 @@ impl Generator {
                 cs += m2[&c2];
                 v.push( CumCount{c: c2, cf: cs});
             }
-            result.transitions.insert(*c1, v);
+            result.transitions.insert(c1.to_string(), v);
         }
         result        
     }
 
-    pub fn generate_random_word(&mut self) -> String {
+    pub fn generate_random_word(&mut self, length: usize) -> String {
         // allocate empty string 
         let mut result = String::from("");
-        let mut current = START_WORD;
-//      let mut c = 10i32;
+        let mut current = vec![START_WORD; length];
         loop {
             // loop until stop character
-            current = self.random_transition(&self.transitions[&current]);
-            if current == END_WORD /*|| c < 1*/ {
+            let cur_str: String = current.clone().into_iter().collect();
+            let c = self.random_transition(&self.transitions[&cur_str]);
+            if c == END_WORD  {
                 break;
             }
-            result.push(current);
-  //        c -= 1;
+            result.push(c);
+            current.remove(0);
+            current.push(c);
         }
         result
     }
@@ -114,6 +119,7 @@ fn main() {
     let buf_reader = std::io::BufReader::new(f);
     
     let mut bld = Builder::new();
+    let length : usize = 4;
     
     // Read all lines.
     for line_result in buf_reader.lines() {
@@ -125,7 +131,7 @@ fn main() {
             if vec.len() > 1 {
                 count = vec[1].parse().unwrap();
             }
-            bld.add_pairs_from_string(&word.to_string(), count);
+            bld.add_pairs_from_string(&word.to_string(), count, length);
         }
     }
     
@@ -134,7 +140,7 @@ fn main() {
     
     // Generate 27 words.
     for _ in 0..27 {
-        let w = gen.generate_random_word();
+        let w = gen.generate_random_word(length);
         println!("word: {}", w);
     }
     
