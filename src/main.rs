@@ -1,7 +1,6 @@
 use std::io::BufRead;
 use std::collections::HashMap;
 use rand::Rng;
-//use rand::thread_rng;
 
 
 // Builds information about transitions.
@@ -85,7 +84,7 @@ impl Generator {
         let random = rng.gen_range(0, total_count);
         let pos = v.binary_search_by_key(&random, |cv| cv.cf);
         let ix = match pos {
-            Ok(i) => i,
+            Ok(i) => i+1,
             Err(i) => i
         };
         v[ix].c            
