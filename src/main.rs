@@ -22,6 +22,20 @@ impl Builder {
             .or_insert(0)
             += count;       
     }
+
+    pub fn add_pairs_from_string(&mut self, word: &String, count: i32) {
+        let sz = word.len();
+        if  sz > 0 {
+            let s = format!("{}{}", word, END_WORD);
+            let mut prev =  START_WORD;
+            for c in s.chars() {
+                self.add_char_pair(prev, c, count);
+                //                    println!("{} '{}'->'{}'", count, prev, c);
+                prev = c;
+            }
+        }
+    }
+    
 }
 
 struct CumCount {
@@ -111,17 +125,7 @@ fn main() {
             if vec.len() > 1 {
                 count = vec[1].parse().unwrap();
             }
-                
-            let sz = word.len();
-            if  sz > 0 {
-                let s = format!("{}{}", word, END_WORD);
-                let mut prev =  START_WORD;
-                for c in s.chars() {
-                    bld.add_char_pair(prev, c, count);
-//                    println!("{} '{}'->'{}'", count, prev, c);
-                    prev = c;
-                }
-            }
+            bld.add_pairs_from_string(&word.to_string(), count);
         }
     }
     
@@ -129,7 +133,7 @@ fn main() {
     let mut gen = Generator::new_from_builder(bld);
     
     // Generate 27 words.
-    for _ in 0..277 {
+    for _ in 0..27 {
         let w = gen.generate_random_word();
         println!("word: {}", w);
     }
