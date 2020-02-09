@@ -15,12 +15,13 @@ impl Builder {
     }
     
     pub fn add_char_pair(&mut self, c1: &String, c2: char, count: i32) {
-        *self
-            .transitions.entry(c1.to_string())
+        *(self
+            .transitions
+            .entry(c1.to_string())
             .or_insert(HashMap::new())
             .entry(c2)
-            .or_insert(0)
-            += count;       
+          .or_insert(0)
+          ) += count;       
     }
 
     pub fn add_pairs_from_string(&mut self, word: &String, count: i32, length: usize) {
@@ -34,14 +35,14 @@ impl Builder {
         w.extend(vec![END_WORD; length]);
 
         for i in 0..wchars.len()+length {
-            let prev = w.get(i..i+length).expect("internal error").into_iter().collect();
+            let prev = w.get(i..i+length).unwrap().into_iter().collect();
             self.add_char_pair(&prev, w[i+length], count);
         }
-
     }
     
 }
 
+#[derive(Copy, Clone)]
 struct CumCount {
     c: char,
     // Number of transitions to character c and all other characters with
@@ -85,7 +86,7 @@ impl Generator {
         let mut current = vec![START_WORD; length];
         loop {
             // loop until stop character
-            let cur_str: String = current.clone().into_iter().collect();
+            let cur_str: String = (&current).into_iter().collect();
             let c = self.random_transition(&self.transitions[&cur_str]);
             if c == END_WORD  {
                 break;
@@ -119,7 +120,7 @@ fn main() {
     let buf_reader = std::io::BufReader::new(f);
     
     let mut bld = Builder::new();
-    let length : usize = 4;
+    let length : usize = 2;
     
     // Read all lines.
     for line_result in buf_reader.lines() {
