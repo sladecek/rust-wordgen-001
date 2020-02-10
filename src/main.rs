@@ -1,7 +1,7 @@
 use std::io::BufRead;
 use std::collections::HashMap;
 use rand::Rng;
-
+use clap::{App, Arg};
 
 // Builds information about transitions.
 pub struct Builder {
@@ -114,13 +114,103 @@ impl Generator {
 const START_WORD: char = '^';
 const END_WORD: char = '$';
 
+
+// Defines actions taken by the program.
+struct Parameters {
+    generated_word_count: u32,
+    depth: u8,
+    dict_file: Option<String>,
+    input_wordlists: Vec<String>,
+    input_textfiles: Vec<String>    
+}
+
+impl Parameters {
+    fn new() -> Parameters {
+        Parameters {
+            generated_word_count: 0,
+            depth: 2,
+            dict_file: None,
+            input_wordlists: Vec::new(),
+            input_textfiles: Vec::new()
+        }
+    }
+}
+
+fn parse_arguments() -> Parameters {
+
+   let matches = App::new("rust-wordgen")
+        .version("1.0")
+        .author("Ladislav Sladecek <ladislav.sladecek@gmail.com>")
+        .about("Generates random words based on n-gramm partial probability.")
+        .arg(Arg::with_name("generate")            
+             .value_name("CNT")
+             .long("generate")
+             .short("g")
+             .help("Generates CNT random words")
+             .takes_value(true))
+        .arg(Arg::with_name("depth")            
+             .value_name("DEPTH")
+             .long("depth")
+             .short("d")
+             .help("Set n-gramm depth")
+             .takes_value(true))
+        .arg(Arg::with_name("dict")            
+             .value_name("DICT")
+             .long("dict")
+             .short("c")
+             .help("Set dictionary name")
+             .takes_value(true))
+        .arg(Arg::with_name("wl")            
+             .value_name("WL")
+             .long("input-word-list")
+             .short("i")
+             .multiple(true)
+             .help("Input wordlist file")
+             .takes_value(true))
+        .arg(Arg::with_name("if")            
+             .value_name("IF")
+             .long("input-file")
+             .short("f")
+             .multiple(true)
+             .help("Input text file")
+             .takes_value(true))
+        .get_matches();
+    
+    let mut parameters = Parameters::new();
+    let g = matches.value_of("generate");
+    if g.is_some() {
+        parameters.generated_word_count = g.unwrap().parse().unwrap();
+    }
+    let d = matches.value_of("depth");
+    if d.is_some() {
+        parameters.depth = d.unwrap().parse().unwrap();
+    }
+
+    parameters.dict_file = matches.value_of("dict").map(String::from);
+
+    let wl = matches.values_of("wl");
+    if wl.is_some() {
+        parameters.input_wordlists = wl.unwrap().map(String::from).collect();
+    }
+
+    let inf = matches.values_of("if");
+    if inf.is_some() {
+        parameters.input_textfiles = inf.unwrap().map(String::from).collect();
+    }
+    parameters
+}
+
+
 fn main() {
+    
+    let parameters = parse_arguments();
+        
     // Open file.
     let f = std::fs::File::open("wisilityinput/cs.dict").expect("error opening input file");
     let buf_reader = std::io::BufReader::new(f);
     
     let mut bld = Builder::new();
-    let length : usize = 2;
+    let length : usize = parameters.depth as usize;
     
     // Read all lines.
     for line_result in buf_reader.lines() {
@@ -139,8 +229,7 @@ fn main() {
     // Create generator from the builder.
     let mut gen = Generator::new_from_builder(bld);
     
-    // Generate 27 words.
-    for _ in 0..27 {
+    for _ in 0..parameters.generated_word_count {
         let w = gen.generate_random_word(length);
         println!("word: {}", w);
     }
