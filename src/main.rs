@@ -1,7 +1,10 @@
 use std::io::BufRead;
+use std::fs::File;
 use std::collections::HashMap;
 use rand::Rng;
 use clap::{App, Arg};
+use serde::{Serialize, Deserialize};
+use serde_json::json;
 
 // Builds information about transitions.
 pub struct Builder {
@@ -66,7 +69,7 @@ impl Builder {
 }    
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone,Serialize,Deserialize)]
 struct CumCount {
     c: char,
     // Number of transitions to character c and all other characters with
@@ -75,6 +78,7 @@ struct CumCount {
 }
 
 // Generates random words.
+#[derive(Serialize,Deserialize)]
 struct Generator {
     depth: usize, 
     transitions: HashMap<String, Vec<CumCount>>    
@@ -106,12 +110,13 @@ impl Generator {
     }
     
     pub fn new_from_file(file_name: &str) -> Generator {
-        let result = Generator { depth: 2, transitions: HashMap::new() };
-        result
+        let file = File::open(file_name).expect("Cannot read file");
+        serde_json::from_reader(file).unwrap()
     }
 
     pub fn save_to_file(&mut self, file_name: &str) {
-        /**/
+        let mut buffer = File::create(file_name).expect("Cannot create file");
+        serde_json::to_writer(buffer, self).unwrap();
     }
    
     pub fn generate_random_word(&mut self, depth: usize) -> String {
