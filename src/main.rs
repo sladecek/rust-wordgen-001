@@ -5,13 +5,14 @@ use clap::{App, Arg};
 
 // Builds information about transitions.
 pub struct Builder {
+    depth: usize,
     // Transition counts from c1 to c2.
     transitions: HashMap<String, HashMap<char, i32>>
 }
 
 impl Builder {
-    pub fn new() -> Builder {
-        Builder { transitions: HashMap::new() }
+    pub fn new(depth: usize) -> Builder {
+        Builder { depth, transitions: HashMap::new() }
     }
     
     pub fn add_char_pair(&mut self, c1: &String, c2: char, count: i32) {
@@ -24,23 +25,46 @@ impl Builder {
           ) += count;       
     }
 
-    pub fn add_pairs_from_string(&mut self, word: &String, count: i32, length: usize) {
+    pub fn add_pairs_from_string(&mut self, word: &String, count: i32) {
         let wchars: Vec<char>  = word.chars().collect();
         if  wchars.len() == 0 {
             return
         }
             
-        let mut w: Vec<char> = vec![START_WORD; length];
+        let mut w: Vec<char> = vec![START_WORD; self.depth];
         w.extend(word.chars());
-        w.extend(vec![END_WORD; length]);
+        w.extend(vec![END_WORD; self.depth]);
 
-        for i in 0..wchars.len()+length {
-            let prev = w.get(i..i+length).unwrap().into_iter().collect();
-            self.add_char_pair(&prev, w[i+length], count);
+        for i in 0..wchars.len()+self.depth {
+            let prev = w.get(i..i+self.depth).expect("apa").into_iter().collect();
+            self.add_char_pair(&prev, w[i+self.depth], count);
         }
     }
-    
-}
+
+    pub fn add_wordlist_file(&mut self, file_name: &str) {
+        
+        let f = std::fs::File::open(file_name).expect("error opening input file");
+        let buf_reader = std::io::BufReader::new(f);
+        // Read all lines.
+        for line_result in buf_reader.lines() {
+            let line = line_result.expect("error reading input file");
+            let vec: Vec<&str> = line.split("\t").collect();
+            if vec.len() > 0 {
+                let word = vec[0];
+                let mut count = 1;
+                if vec.len() > 1 {
+                    count = vec[1].parse().unwrap();
+                }
+                self.add_pairs_from_string(&word.to_string(), count);
+            }
+        }        
+    }
+
+    pub fn add_text_file(&mut self, file_name: &str) {
+        /* */
+    }
+}    
+
 
 #[derive(Copy, Clone)]
 struct CumCount {
@@ -52,13 +76,14 @@ struct CumCount {
 
 // Generates random words.
 struct Generator {
+    depth: usize, 
     transitions: HashMap<String, Vec<CumCount>>    
 }
 
 impl Generator {
 
     pub fn new_from_builder(b: Builder) -> Generator {
-        let mut result = Generator { transitions: HashMap::new() };
+        let mut result = Generator { depth: b.depth,  transitions: HashMap::new() };
         // for all starting characters
         for c1 in b.transitions.keys() {
             let m2 = &b.transitions[c1];
@@ -79,11 +104,20 @@ impl Generator {
         }
         result        
     }
+    
+    pub fn new_from_file(file_name: &str) -> Generator {
+        let result = Generator { depth: 2, transitions: HashMap::new() };
+        result
+    }
 
-    pub fn generate_random_word(&mut self, length: usize) -> String {
+    pub fn save_to_file(&mut self, file_name: &str) {
+        /**/
+    }
+   
+    pub fn generate_random_word(&mut self, depth: usize) -> String {
         // allocate empty string 
         let mut result = String::from("");
-        let mut current = vec![START_WORD; length];
+        let mut current = vec![START_WORD; depth];
         loop {
             // loop until stop character
             let cur_str: String = (&current).into_iter().collect();
@@ -117,9 +151,11 @@ const END_WORD: char = '$';
 
 // Defines actions taken by the program.
 struct Parameters {
-    generated_word_count: u32,
-    depth: u8,
-    dict_file: Option<String>,
+    generate: bool,
+    learn: bool,
+    word_count: u32,
+    depth: usize,
+    dict_file: String,
     input_wordlists: Vec<String>,
     input_textfiles: Vec<String>    
 }
@@ -127,9 +163,11 @@ struct Parameters {
 impl Parameters {
     fn new() -> Parameters {
         Parameters {
-            generated_word_count: 0,
+            generate: false,
+            learn: false,
+            word_count: 1,
             depth: 2,
-            dict_file: None,
+            dict_file: String::new(),
             input_wordlists: Vec::new(),
             input_textfiles: Vec::new()
         }
@@ -143,22 +181,40 @@ fn parse_arguments() -> Parameters {
         .author("Ladislav Sladecek <ladislav.sladecek@gmail.com>")
         .about("Generates random words based on n-gramm partial probability.")
         .arg(Arg::with_name("generate")            
-             .value_name("CNT")
              .long("generate")
              .short("g")
-             .help("Generates CNT random words")
+             .help("Generate random words")
+             .takes_value(false)
+             .conflicts_with("learn"))
+        .arg(Arg::with_name("learn")            
+             .long("learn")
+             .short("l")
+             .help("Create new dictionary from text files and wordlists.")
+             .takes_value(false)
+             .requires("depth")
+             .requires("dict")
+             )
+        .arg(Arg::with_name("count")            
+             .value_name("CNT")
+             .long("count")
+             .short("c")
+             .help("Number of generated words")
+             .conflicts_with("learn")
              .takes_value(true))
         .arg(Arg::with_name("depth")            
              .value_name("DEPTH")
              .long("depth")
              .short("d")
              .help("Set n-gramm depth")
-             .takes_value(true))
+             .takes_value(true)
+             .conflicts_with("generate")
+             )
         .arg(Arg::with_name("dict")            
              .value_name("DICT")
              .long("dict")
-             .short("c")
+             .short("t")
              .help("Set dictionary name")
+             .default_value("default.dict")             
              .takes_value(true))
         .arg(Arg::with_name("wl")            
              .value_name("WL")
@@ -166,6 +222,7 @@ fn parse_arguments() -> Parameters {
              .short("i")
              .multiple(true)
              .help("Input wordlist file")
+             .conflicts_with("generate")
              .takes_value(true))
         .arg(Arg::with_name("if")            
              .value_name("IF")
@@ -173,29 +230,34 @@ fn parse_arguments() -> Parameters {
              .short("f")
              .multiple(true)
              .help("Input text file")
+             .conflicts_with("generate")
              .takes_value(true))
         .get_matches();
     
     let mut parameters = Parameters::new();
-    let g = matches.value_of("generate");
-    if g.is_some() {
-        parameters.generated_word_count = g.unwrap().parse().unwrap();
-    }
-    let d = matches.value_of("depth");
-    if d.is_some() {
-        parameters.depth = d.unwrap().parse().unwrap();
+    let c = matches.value_of("count");
+    if c.is_some() {
+        parameters.word_count = c.unwrap().parse().expect("Word count must be an integer");
     }
 
-    parameters.dict_file = matches.value_of("dict").map(String::from);
+    parameters.generate = matches.is_present("generate");
+    parameters.learn = matches.is_present("learn");
+
+    let d = matches.value_of("depth");
+    if d.is_some() {
+        parameters.depth = d.expect("udef").parse().expect("Undefined depth");
+    }
+
+    parameters.dict_file = matches.value_of("dict").unwrap().to_string();
 
     let wl = matches.values_of("wl");
     if wl.is_some() {
-        parameters.input_wordlists = wl.unwrap().map(String::from).collect();
+        parameters.input_wordlists = wl.expect("wl").map(String::from).collect();
     }
 
     let inf = matches.values_of("if");
     if inf.is_some() {
-        parameters.input_textfiles = inf.unwrap().map(String::from).collect();
+        parameters.input_textfiles = inf.expect("if").map(String::from).collect();
     }
     parameters
 }
@@ -204,34 +266,23 @@ fn parse_arguments() -> Parameters {
 fn main() {
     
     let parameters = parse_arguments();
-        
-    // Open file.
-    let f = std::fs::File::open("wisilityinput/cs.dict").expect("error opening input file");
-    let buf_reader = std::io::BufReader::new(f);
-    
-    let mut bld = Builder::new();
-    let length : usize = parameters.depth as usize;
-    
-    // Read all lines.
-    for line_result in buf_reader.lines() {
-        let line = line_result.expect("error reading input file");
-        let vec: Vec<&str> = line.split("\t").collect();
-        if vec.len() > 0 {
-            let word = vec[0];
-            let mut count = 1;
-            if vec.len() > 1 {
-                count = vec[1].parse().unwrap();
-            }
-            bld.add_pairs_from_string(&word.to_string(), count, length);
+    if parameters.generate {
+        let mut gen = Generator::new_from_file(parameters.dict_file.as_str());
+        for _ in 0..parameters.word_count {
+            let w = gen.generate_random_word(gen.depth);
+            println!("word: {}", w);
+        }        
+    } else if parameters.learn {
+        let mut bld = Builder::new(parameters.depth);
+        for i in parameters.input_wordlists {
+            bld.add_wordlist_file(i.as_str());
         }
+        for i in parameters.input_textfiles {
+            bld.add_text_file(i.as_str())
+        }
+        let mut gen = Generator::new_from_builder(bld);
+        gen.save_to_file(parameters.dict_file.as_str());
+    } else {
+        panic!("Nothing to do.");
     }
-    
-    // Create generator from the builder.
-    let mut gen = Generator::new_from_builder(bld);
-    
-    for _ in 0..parameters.generated_word_count {
-        let w = gen.generate_random_word(length);
-        println!("word: {}", w);
-    }
-    
 }
