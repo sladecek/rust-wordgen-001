@@ -1,10 +1,13 @@
+use std::io::BufReader;
 use std::io::BufRead;
 use std::fs::File;
 use std::collections::HashMap;
 use rand::Rng;
 use clap::{App, Arg};
 use serde::{Serialize, Deserialize};
-use serde_json::json;
+use flate2::Compression;
+use flate2::write::ZlibEncoder;
+use flate2::bufread::ZlibDecoder;
 
 // Builds information about transitions.
 pub struct Builder {
@@ -111,12 +114,15 @@ impl Generator {
     
     pub fn new_from_file(file_name: &str) -> Generator {
         let file = File::open(file_name).expect("Cannot read file");
-        serde_json::from_reader(file).unwrap()
+        let br = BufReader::new(file);
+        let decompressed = ZlibDecoder::new(br);
+        serde_json::from_reader(decompressed).unwrap()
     }
 
     pub fn save_to_file(&mut self, file_name: &str) {
-        let mut buffer = File::create(file_name).expect("Cannot create file");
-        serde_json::to_writer(buffer, self).unwrap();
+        let buffer = File::create(file_name).expect("Cannot create file");
+        let compressed = ZlibEncoder::new(buffer, Compression::default());
+        serde_json::to_writer(compressed, self).unwrap();
     }
    
     pub fn generate_random_word(&mut self, depth: usize) -> String {
