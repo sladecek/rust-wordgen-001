@@ -1,6 +1,8 @@
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
+use std::time::{Instant};
+
 use wordgen::generator::{Generator};
 use wordgen::builder::{Builder};
 use wordgen::parameters::{parse_arguments};
@@ -8,6 +10,7 @@ use wordgen::parameters::{parse_arguments};
 fn main() {
     
     let parameters = parse_arguments();
+    let start = Instant::now();
     if parameters.generate {
         let mut gen = Generator::new_from_file(parameters.dict_file.as_str());
         let mut rng = if parameters.use_seed {
@@ -32,5 +35,9 @@ fn main() {
         gen.save_to_file(parameters.dict_file.as_str());
     } else {
         panic!("Nothing to do.");
+    }
+    if parameters.timing {
+        let duration = start.elapsed();
+        println!("Time elapsed is: {:?}", duration);
     }
 }

@@ -10,7 +10,8 @@ pub struct Parameters {
     pub input_wordlists: Vec<String>,
     pub input_textfiles: Vec<String>,
     pub use_seed: bool,
-    pub seed: u64
+    pub seed: u64,
+    pub timing: bool
 }
 
 
@@ -25,7 +26,8 @@ impl Parameters {
             input_wordlists: Vec::new(),
             input_textfiles: Vec::new(),
             use_seed: false,
-            seed: 0
+            seed: 0,
+            timing: false
 
         }
     }
@@ -96,6 +98,12 @@ pub fn parse_arguments() -> Parameters {
              .help("Input text file")
              .conflicts_with("generate")
              .takes_value(true))
+        .arg(Arg::with_name("timing")            
+             .long("timing")
+             .short("T")
+             .help("Measure time.")
+             .takes_value(false)
+             )
         .get_matches();
     
     let mut parameters = Parameters::new();
@@ -128,6 +136,9 @@ pub fn parse_arguments() -> Parameters {
     if inf.is_some() {
         parameters.input_textfiles = inf.expect("if").map(String::from).collect();
     }
+
+    parameters.timing = matches.is_present("timing");
+    
     parameters
 }
 
