@@ -2,7 +2,8 @@ use std::io::BufReader;
 use std::io::BufRead;
 use std::fs::File;
 use std::collections::HashMap;
-use rand::Rng;
+use rand::{Rng, SeedableRng};
+use rand::rngs::StdRng;
 use clap::{App, Arg};
 use serde::{Serialize, Deserialize};
 use flate2::Compression;
@@ -125,14 +126,14 @@ impl Generator {
         serde_json::to_writer(compressed, self).unwrap();
     }
    
-    pub fn generate_random_word(&mut self, depth: usize) -> String {
+    pub fn generate_random_word(&mut self, depth: usize, rng: &mut StdRng) -> String {
         // allocate empty string 
         let mut result = String::from("");
         let mut current = vec![START_WORD; depth];
         loop {
             // loop until stop character
             let cur_str: String = (&current).into_iter().collect();
-            let c = self.random_transition(&self.transitions[&cur_str]);
+            let c = self.random_transition(&self.transitions[&cur_str], rng);
             if c == END_WORD  {
                 break;
             }
@@ -143,8 +144,7 @@ impl Generator {
         result
     }
 
-    fn random_transition(&self, v: &Vec<CumCount>) -> char {
-        let mut rng = rand::thread_rng();
+    fn random_transition(&self, v: &Vec<CumCount>, rng: &mut StdRng) -> char {
         let total_count = v[v.len()-1].cf;
         let random = rng.gen_range(0, total_count);
         let pos = v.binary_search_by_key(&random, |cv| cv.cf);
@@ -168,7 +168,9 @@ struct Parameters {
     depth: usize,
     dict_file: String,
     input_wordlists: Vec<String>,
-    input_textfiles: Vec<String>    
+    input_textfiles: Vec<String>,
+    use_seed: bool,
+    seed: u64
 }
 
 impl Parameters {
@@ -180,7 +182,10 @@ impl Parameters {
             depth: 2,
             dict_file: String::new(),
             input_wordlists: Vec::new(),
-            input_textfiles: Vec::new()
+            input_textfiles: Vec::new(),
+            use_seed: false,
+            seed: 0
+
         }
     }
 }
@@ -210,6 +215,13 @@ fn parse_arguments() -> Parameters {
              .long("count")
              .short("c")
              .help("Number of generated words")
+             .conflicts_with("learn")
+             .takes_value(true))
+        .arg(Arg::with_name("seed")            
+             .value_name("SEED")
+             .long("seed")
+             .short("s")
+             .help("Random seed")
              .conflicts_with("learn")
              .takes_value(true))
         .arg(Arg::with_name("depth")            
@@ -250,6 +262,11 @@ fn parse_arguments() -> Parameters {
     if c.is_some() {
         parameters.word_count = c.unwrap().parse().expect("Word count must be an integer");
     }
+    let s = matches.value_of("seed");
+    if s.is_some() {
+        parameters.use_seed = true;
+        parameters.seed = s.unwrap().parse().expect("Seed must be an unsigned integer");
+    }
 
     parameters.generate = matches.is_present("generate");
     parameters.learn = matches.is_present("learn");
@@ -279,8 +296,14 @@ fn main() {
     let parameters = parse_arguments();
     if parameters.generate {
         let mut gen = Generator::new_from_file(parameters.dict_file.as_str());
+        let mut rng = if parameters.use_seed {
+            StdRng::seed_from_u64(parameters.seed)
+        } else {
+            StdRng::from_entropy()
+        };
+
         for _ in 0..parameters.word_count {
-            let w = gen.generate_random_word(gen.depth);
+            let w = gen.generate_random_word(gen.depth, &mut rng);
             println!("word: {}", w);
         }        
     } else if parameters.learn {
