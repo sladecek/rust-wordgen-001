@@ -8,6 +8,7 @@ pub struct Builder {
     pub transitions: HashMap<String, HashMap<char, i32>>
 }
 
+// Special symbols to denote the word boundary.
 pub const START_WORD: char = '^';
 pub const END_WORD: char = '$';
 
@@ -62,7 +63,29 @@ impl Builder {
     }
 
     pub fn add_text_file(&mut self, file_name: &str) {
-        /* */
+        let f = std::fs::File::open(file_name).expect("error opening input file");
+        let buf_reader = std::io::BufReader::new(f);
+        for line_result in buf_reader.lines() {
+            let line = line_result.expect("error reading input file");
+            self.add_text_line(&line)
+        }
     }
+
+    fn add_text_line(&mut self, line: &String) {
+        let mut last_word: String = String::new();
+        for c in line.chars() {
+            if c.is_alphabetic() {
+                last_word.push(c)
+            } else {
+                if !last_word.is_empty() {
+                    self.add_pairs_from_string(&last_word, 1);
+                    last_word = String::new();
+                }
+            }
+        }
+        if !last_word.is_empty() {
+            self.add_pairs_from_string(&last_word, 1);
+        }
+    }    
 }    
 
